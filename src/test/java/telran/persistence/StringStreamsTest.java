@@ -1,27 +1,20 @@
 package telran.persistence;
+import static org.junit.jupiter.api.Assertions.*;
 
-
-import java.nio.file.FileVisitOption;
+import java.io.*;
 import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.EnumSet;
-
-import static org.junit.jupiter.api.Assertions.*;
-import java.io.*;
+import java.util.HashSet;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 public class StringStreamsTest {
     static final String PRINT_STREAM_FILE = "printStreamFile.txt";
     static final String PRINT_WRITER_FILE = "printWriterFile.txt";
-    
-    static final String OUTPUT_FILE = "output.txt";
-    static final String PATH = "C:\\JAVA\\Beersheva24\\java-projects";
+    static final int SPACES_PER_DEPTH_LEVEL=2;
     @Test
     @Disabled
     void printStreamTest() throws Exception{
@@ -36,7 +29,6 @@ public class StringStreamsTest {
         printWriter.println("HELLO");
         printWriter.close();
     }
-    
     @Test
     @Disabled
     void bufferedReaderTest() throws Exception{
@@ -44,64 +36,65 @@ public class StringStreamsTest {
         assertEquals("HELLO",reader.readLine());
         reader.close();
     }
-   
     @Test
-    void printingDirectoryTest(){
-        printDirectoryContent(PATH,3);
+    void printingDirectoryTest() throws IOException{
+        printDirectoryContent(".",2);
     }
-    
     /**
      * 
      * @param path -  path to a directory
      * @param depth -  number of been walked levels
      */
-     void printDirectoryContent(String path, int depth)  {
-        Path startingDir = Paths.get(path);
-        Path outputPath = Paths.get(OUTPUT_FILE);
-        //TODO
-        //dir1
-          //dir11
-            //file
-            //dir111
-          //dir12
-        //Consider class Path
-        //Consider class Files
-        //Consider method https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/nio/file/Files.html#walkFileTree(java.nio.file.Path,java.util.Set,int,java.nio.file.FileVisitor)
-        try {
-            // Clear or create the output file
-            Files.writeString(outputPath, "", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            
-            Files.walkFileTree(startingDir, EnumSet.noneOf(FileVisitOption.class), depth, new SimpleFileVisitor<Path>() {
-                private int currentDepth = 0;
+   private void printDirectoryContent(String dirPathStr, int depth) throws IOException {
+		
+		//using FIles.walkFileTree
+		Path pathParam = Path.of(dirPathStr);
+		if (!Files.isDirectory(pathParam)) {
+			throw new IllegalArgumentException("not directory");
+		}
+		Path path = pathParam.toAbsolutePath().normalize();
+		int count = path.getNameCount();
+		System.out.println("directory: " + path);
+		Files.walkFileTree(path, new HashSet<>(), depth <= 0 ? Integer.MAX_VALUE : depth, new FileVisitor<Path>() {
 
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                    printIndented(dir.getFileName().toString(), currentDepth, outputPath);
-                    currentDepth++;
-                    return FileVisitResult.CONTINUE;
-                }
+			@Override
+			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+				if (!Files.isSameFile(path, dir)) {
+					printPathWithOffset(dir);
+				}
+				return FileVisitResult.CONTINUE;
+			}
 
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    printIndented(file.getFileName().toString(), currentDepth, outputPath);
-                    return FileVisitResult.CONTINUE;
-                }
+			private void printPathWithOffset(Path path) {
+				System.out.printf("%s%s - %s\n", " ".repeat(getSpacesNumber(path)),
+						path.getFileName(), Files.isDirectory(path) ? "dir" : "file");
+				
+			}
 
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                    currentDepth--;
-                    return FileVisitResult.CONTINUE;
-                }
-                
-                private void printIndented(String name, int level, Path outputPath) throws IOException {
-                    String indent = "  ".repeat(level);
-                    Files.writeString(outputPath, indent + name + System.lineSeparator(), StandardOpenOption.APPEND);
-                }
-            });
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+			private int getSpacesNumber(Path path) {
+				return (path.getNameCount() - count) * SPACES_PER_DEPTH_LEVEL;
+			}
 
-   }
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				printPathWithOffset(file);
+				return FileVisitResult.CONTINUE;
+			}
 
+			@Override
+			public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+				System.err.println("error: " + exc);
+				return FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+				if (exc != null) {
+					System.err.println("error: " + exc);
+				}
+				return FileVisitResult.CONTINUE;
+			}
+		});
+
+}
 }
